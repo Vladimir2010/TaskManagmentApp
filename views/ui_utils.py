@@ -13,6 +13,9 @@ class FluentStyle:
     TEXT_LIGHT = "#000000"
     SURFACE_DARK = "#2D2D2D"
     SURFACE_LIGHT = "#FFFFFF"
+    BORDER_DARK = "#3E3E3E"
+    HOVER_DARK = "#3E3E3E"
+    TEXT_SECONDARY = "#AAAAAA"
 
     @staticmethod
     def default_font():

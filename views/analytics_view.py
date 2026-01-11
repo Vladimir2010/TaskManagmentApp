@@ -3,6 +3,7 @@ from PyQt6.QtCharts import QChart, QChartView, QPieSeries, QPieSlice
 from PyQt6.QtGui import QPainter, QColor
 from PyQt6.QtCore import Qt
 from views.ui_utils import FluentStyle
+from services.language_service import lang_service
 
 class AnalyticsView(QWidget):
     def __init__(self, task_controller, user_id):
@@ -14,9 +15,9 @@ class AnalyticsView(QWidget):
     def init_ui(self):
         layout = QVBoxLayout(self)
         
-        title = QLabel("Analytics & Statistics")
-        title.setStyleSheet("font-size: 24px; font-weight: bold;")
-        layout.addWidget(title)
+        self.title = QLabel()
+        self.title.setStyleSheet("font-size: 24px; font-weight: bold;")
+        layout.addWidget(self.title)
         
         # Pie Chart
         self.series = QPieSeries()
@@ -45,14 +46,19 @@ class AnalyticsView(QWidget):
         pending = stats.get('pending', 0)
         
         if completed + pending == 0:
-            slice_ = self.series.append("No Tasks", 1)
+            slice_ = self.series.append(lang_service.get("no_tasks"), 1)
             slice_.setColor(QColor("#555555"))
             return
 
-        slice_c = self.series.append("Completed", completed)
+        slice_c = self.series.append(lang_service.get("status_completed"), completed)
         slice_c.setColor(QColor("#107C10")) # Green
         slice_c.setLabelVisible(True)
         
-        slice_p = self.series.append("Pending", pending)
+        slice_p = self.series.append(lang_service.get("status_pending"), pending)
         slice_p.setColor(QColor("#C50F1F")) # Red
         slice_p.setLabelVisible(True)
+
+    def retranslate_ui(self):
+        self.title.setText(lang_service.get("analytics_title"))
+        self.refresh_stats()
+

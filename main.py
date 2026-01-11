@@ -24,17 +24,24 @@ def main():
     
     # 4. Handle Login Success
     def on_login_success(user):
-        # Create Main Window
-        main_window = MainView(user)
-        
-        # Load Plugins
-        plugin_manager = PluginManager()
-        plugin_manager.load_plugins(main_window)
-        
-        main_window.show()
-        # Keep reference to avoid garbage collection
-        global win 
-        win = main_window
+        try:
+            # Create Main Window
+            main_window = MainView(user)
+            
+            # Load Plugins
+            plugin_manager = PluginManager()
+            plugin_manager.load_plugins(main_window)
+            
+            main_window.show()
+            # Keep reference to avoid garbage collection
+            global win 
+            win = main_window
+        except Exception as e:
+            from PyQt6.QtWidgets import QMessageBox
+            import traceback
+            error_msg = f"Error starting applications:\n{str(e)}\n\n{traceback.format_exc()}"
+            print(error_msg)
+            QMessageBox.critical(None, "Startup Error", error_msg)
 
     login_window.login_success.connect(on_login_success)
     

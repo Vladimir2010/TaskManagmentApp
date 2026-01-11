@@ -1,12 +1,14 @@
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-                             QPushButton, QListWidget, QStackedWidget, QLabel, 
+                             QPushButton, QTableWidget, QTableWidgetItem, QStackedWidget, QLabel, 
                              QDialog, QLineEdit, QComboBox, QDateEdit, QTextEdit, 
-                             QMessageBox, QListWidgetItem, QMenu)
+                             QMessageBox, QListWidgetItem, QMenu, QHeaderView)
 from PyQt6.QtCore import Qt, QSize, QDate
 from PyQt6.QtGui import QIcon, QAction
+import os
 from views.ui_utils import FluentStyle, WindowEffect
 from views.calendar_view import CalendarView
 from views.analytics_view import AnalyticsView
+from views.about_view import AboutDialog
 from controllers.task_controller import TaskController
 from controllers.sync_controller import SyncController
 from services.notification_service import NotificationService
@@ -34,11 +36,16 @@ class AddTaskDialog(QDialog):
         layout.addWidget(self.date_input)
         
         self.priority_input = QComboBox()
-        self.priority_input.addItems(["Low", "Medium", "High", "Critical"])
+        # Store internal values separately or rely on index, for simplicity we use keys that map to translation keys
+        # But here we need to display translated text.
+        # We will populate these in update_texts to handle language switch if needed, 
+        # but for a modal dialog, it re-creates usually. 
+        # Let's populate initially with current lang.
+        self.priority_input.addItems([lang_service.get(f"priority_{p}") for p in ["Low", "Medium", "High", "Critical"]])
         layout.addWidget(self.priority_input)
         
         self.category_input = QComboBox()
-        self.category_input.addItems(["Work", "Personal", "Study", "Other"])
+        self.category_input.addItems([lang_service.get(f"cat_{c}") for c in ["Work", "Personal", "Study", "Other"]])
         layout.addWidget(self.category_input)
         
         self.save_btn = QPushButton()
@@ -48,14 +55,25 @@ class AddTaskDialog(QDialog):
         
         self.update_texts()
 
-    def retranslate_ui(self):
-        self.setWindowTitle(lang_service.get("new_task"))
-    
+    def get_data(self):
+        # We need to map back the translated priority/category to internal English values
+        # Or simpler: Just stick to index since the order is fixed.
+        priorities = ["Low", "Medium", "High", "Critical"]
+        categories = ["Work", "Personal", "Study", "Other"]
+        
+        return {
+            "title": self.title_input.text(),
+            "description": self.desc_input.toPlainText(),
+            "due_date": self.date_input.date().toString("yyyy-MM-dd"),
+            "priority": priorities[self.priority_input.currentIndex()],
+            "category": categories[self.category_input.currentIndex()]
+        }
+
     def update_texts(self):
         self.setWindowTitle(lang_service.get("new_task"))
-        self.title_input.setPlaceholderText(lang_service.get("task_created")) # Using existing key or generic title
-        self.desc_input.setPlaceholderText("Description")
-        self.save_btn.setText("Save Task")
+        self.title_input.setPlaceholderText(lang_service.get("task_title_placeholder"))
+        self.desc_input.setPlaceholderText(lang_service.get("task_desc_placeholder"))
+        self.save_btn.setText(lang_service.get("save_task"))
 
 
 class MainView(QMainWindow):
@@ -75,6 +93,40 @@ class MainView(QMainWindow):
         self.sync_controller.start_background_sync()
 
     def init_ui(self):
+        # Menu Bar
+        self.menu_bar = self.menuBar()
+        self.menu_bar.setStyleSheet(f"""
+            QMenuBar {{
+                background-color: {FluentStyle.BACKGROUND_DARK};
+                color: {FluentStyle.TEXT_DARK};
+                border-bottom: 1px solid {FluentStyle.BORDER_DARK};
+            }}
+            QMenuBar::item {{
+                background-color: transparent;
+                padding: 8px 12px;
+            }}
+            QMenuBar::item:selected {{
+                background-color: {FluentStyle.SURFACE_DARK};
+            }}
+            QMenu {{
+                background-color: {FluentStyle.SURFACE_DARK};
+                border: 1px solid {FluentStyle.BORDER_DARK};
+                padding: 5px;
+            }}
+            QMenu::item {{
+                padding: 6px 24px;
+                border-radius: 4px;
+            }}
+            QMenu::item:selected {{
+                background-color: {FluentStyle.HOVER_DARK};
+            }}
+        """)
+        
+        self.help_menu = self.menu_bar.addMenu(lang_service.get("menu_help"))
+        self.about_action = QAction(lang_service.get("menu_about"), self)
+        self.about_action.triggered.connect(self.show_about)
+        self.help_menu.addAction(self.about_action)
+
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QHBoxLayout(central_widget)
@@ -192,9 +244,30 @@ class MainView(QMainWindow):
         filter_layout.addWidget(self.search_input)
         layout.addLayout(filter_layout)
         
-        # Task List
-        self.task_list_widget = QListWidget()
-        self.task_list_widget.setStyleSheet(f"background-color: {FluentStyle.SURFACE_DARK}; border: none; border-radius: 8px;")
+        # Task List (Table)
+        self.task_list_widget = QTableWidget()
+        self.task_list_widget.setColumnCount(3)
+        self.task_list_widget.setHorizontalHeaderLabels([lang_service.get("priority"), lang_service.get("my_tasks"), lang_service.get("due_date")])
+        self.task_list_widget.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.task_list_widget.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.task_list_widget.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        
+        self.task_list_widget.setStyleSheet(f"""
+            QTableWidget {{
+                background-color: {FluentStyle.SURFACE_DARK};
+                gridline-color: #3E3E3E;
+                border: none;
+                border-radius: 8px;
+            }}
+            QHeaderView::section {{
+                background-color: {FluentStyle.SURFACE_DARK};
+                color: {FluentStyle.TEXT_DARK};
+                border: none;
+                font-weight: bold;
+                padding: 5px;
+            }}
+        """)
+        
         self.task_list_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.task_list_widget.customContextMenuRequested.connect(self.show_context_menu)
         layout.addWidget(self.task_list_widget)
@@ -219,19 +292,55 @@ class MainView(QMainWindow):
         self.add_btn.setText(lang_service.get('new_task'))
         self.search_input.setPlaceholderText(lang_service.get('search_placeholder'))
         
+        # Update Menu
+        self.help_menu.setTitle(lang_service.get("menu_help"))
+        self.about_action.setText(lang_service.get("menu_about"))
+
+        # Update Table Headers
+        self.task_list_widget.setHorizontalHeaderLabels([lang_service.get("priority"), lang_service.get("my_tasks"), lang_service.get("due_date")])
+
         # Refresh widgets if needed
+        self.calendar_page.retranslate_ui()
+        self.analytics_page.retranslate_ui()
+        self.load_tasks()
 
 
     def load_tasks(self):
-        self.task_list_widget.clear()
+        self.task_list_widget.setRowCount(0)
         tasks = self.task_controller.get_user_tasks(self.user.id)
         search_term = self.search_input.text().lower()
         
+        current_lang = lang_service.get_current_code()
+        
         for task in tasks:
             if search_term in task.title.lower():
-                item = QListWidgetItem(f"[{task.priority}] {task.title} - Due: {task.due_date}")
-                item.setData(Qt.ItemDataRole.UserRole, task.id)
-                self.task_list_widget.addItem(item)
+                row = self.task_list_widget.rowCount()
+                self.task_list_widget.insertRow(row)
+                
+                # Priority
+                priority_key = f"priority_{task.priority}"
+                priority_text = lang_service.get(priority_key, default=task.priority)
+                item_priority = QTableWidgetItem(priority_text)
+                self.task_list_widget.setItem(row, 0, item_priority)
+                
+                # Title
+                item_title = QTableWidgetItem(task.title)
+                item_title.setData(Qt.ItemDataRole.UserRole, task.id) # Store ID here
+                self.task_list_widget.setItem(row, 1, item_title)
+                
+                # Date Formatting
+                date_str = task.due_date
+                try:
+                    # Input is yyyy-MM-dd
+                    parts = date_str.split("-")
+                    if len(parts) == 3:
+                         # Output dd.MM.yyyy
+                        date_str = f"{parts[2]}.{parts[1]}.{parts[0]}"
+                except:
+                    pass
+                    
+                item_date = QTableWidgetItem(date_str)
+                self.task_list_widget.setItem(row, 2, item_date)
 
     def open_add_task_dialog(self):
         dialog = AddTaskDialog(self)
@@ -248,33 +357,42 @@ class MainView(QMainWindow):
                 )
                 self.load_tasks()
                 self.analytics_page.refresh_stats()
-                NotificationService.send_notification("Task Created", f"{data['title']} added successfully!")
+                NotificationService.send_notification(
+                    lang_service.get("notif_task_created_title"), 
+                    lang_service.get("notif_task_created_msg", title=data['title'])
+                )
 
     def show_context_menu(self, pos):
         item = self.task_list_widget.itemAt(pos)
         if not item:
             return
             
+        # Ensure we get the ID from column 1 (Title), regardless of clicked column
+        row = self.task_list_widget.row(item)
+        title_item = self.task_list_widget.item(row, 1)
+        if not title_item:
+            return
+            
         menu = QMenu()
-        delete_action = QAction("Delete Task", self)
-        delete_action.triggered.connect(lambda: self.delete_task(item))
+        delete_action = QAction(lang_service.get("delete_task"), self)
+        delete_action.triggered.connect(lambda: self.delete_task_item(title_item))
         menu.addAction(delete_action)
         
-        complete_action = QAction("Mark Completed", self)
-        complete_action.triggered.connect(lambda: self.complete_task(item))
+        complete_action = QAction(lang_service.get("mark_completed"), self)
+        complete_action.triggered.connect(lambda: self.complete_task_item(title_item))
         menu.addAction(complete_action)
         
         menu.exec(self.task_list_widget.mapToGlobal(pos))
 
-    def delete_task(self, item):
+    def delete_task_item(self, item):
         task_id = item.data(Qt.ItemDataRole.UserRole)
-        confirm = QMessageBox.question(self, "Confirm Delete", "Are you sure you want to delete this task?")
+        confirm = QMessageBox.question(self, lang_service.get("confirm_delete_title"), lang_service.get("confirm_delete_msg"))
         if confirm == QMessageBox.StandardButton.Yes:
             self.task_controller.delete_task(task_id)
             self.load_tasks()
             self.analytics_page.refresh_stats()
 
-    def complete_task(self, item):
+    def complete_task_item(self, item):
         task_id = item.data(Qt.ItemDataRole.UserRole)
         self.task_controller.update_task(task_id, status="Completed")
         self.load_tasks()
@@ -282,26 +400,40 @@ class MainView(QMainWindow):
 
     def trigger_sync(self):
         self.sync_controller.perform_sync()
-        QMessageBox.information(self, "Sync", "Synchronization completed!")
+        QMessageBox.information(self, lang_service.get("sync"), lang_service.get("sync_completed"))
         
     def export_csv(self):
         from services.export_service import ExportService
         from PyQt6.QtWidgets import QFileDialog
-        path, _ = QFileDialog.getSaveFileName(self, "Export CSV", "", "CSV Files (*.csv)")
+        path, _ = QFileDialog.getSaveFileName(self, lang_service.get("export_info"), "", "CSV Files (*.csv)")
         if path:
             tasks = self.task_controller.get_user_tasks(self.user.id)
             success, msg = ExportService.export_to_csv(tasks, path)
-            QMessageBox.information(self, "Export", msg)
+            QMessageBox.information(self, lang_service.get("export_info"), msg)
+            if success:
+                try:
+                    os.startfile(path)
+                except Exception:
+                    pass
 
     def export_pdf(self):
         from services.export_service import ExportService
         from PyQt6.QtWidgets import QFileDialog
-        path, _ = QFileDialog.getSaveFileName(self, "Export PDF", "", "PDF Files (*.pdf)")
+        path, _ = QFileDialog.getSaveFileName(self, lang_service.get("export_info"), "", "PDF Files (*.pdf)")
         if path:
             tasks = self.task_controller.get_user_tasks(self.user.id)
             success, msg = ExportService.export_to_pdf(tasks, path)
-            QMessageBox.information(self, "Export", msg)
+            QMessageBox.information(self, lang_service.get("export_info"), msg)
+            if success:
+                try:
+                    os.startfile(path)
+                except Exception:
+                    pass
             
     def closeEvent(self, event):
         self.sync_controller.stop_sync()
         event.accept()
+
+    def show_about(self):
+        dlg = AboutDialog(self)
+        dlg.exec()

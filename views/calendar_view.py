@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QCalendarWidget, QLabel, QListWidget
 from PyQt6.QtCore import QDate, Qt
 from views.ui_utils import FluentStyle
+from services.language_service import lang_service
 
 class CalendarView(QWidget):
     def __init__(self, task_controller, user_id):
@@ -12,11 +13,11 @@ class CalendarView(QWidget):
     def init_ui(self):
         layout = QVBoxLayout(self)
         
-        title = QLabel("Task Calendar")
-        title.setFont(FluentStyle.title_font()) 
+        self.title = QLabel()
+        self.title.setFont(FluentStyle.title_font()) 
         # Fallback if I forgot to add font helper, but I'll stick to styles defined
-        title.setStyleSheet("font-size: 24px; font-weight: bold;")
-        layout.addWidget(title)
+        self.title.setStyleSheet("font-size: 24px; font-weight: bold;")
+        layout.addWidget(self.title)
         
         self.calendar = QCalendarWidget()
         self.calendar.setGridVisible(True)
@@ -49,3 +50,6 @@ class CalendarView(QWidget):
         for task in tasks:
             if task.due_date == selected_date_str:
                 self.task_list.addItem(f"{task.priority} - {task.title}")
+
+    def retranslate_ui(self):
+        self.title.setText(lang_service.get("task_calendar"))

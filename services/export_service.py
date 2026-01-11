@@ -2,6 +2,7 @@ import csv
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 import os
+from services.language_service import lang_service
 
 class ExportService:
     @staticmethod
@@ -9,9 +10,27 @@ class ExportService:
         try:
             with open(filepath, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
-                writer.writerow(["ID", "Title", "Description", "Due Date", "Priority", "Status"])
+                # Translated Headers
+                headers = [
+                    lang_service.get("col_id"),
+                    lang_service.get("col_title"),
+                    lang_service.get("col_desc"),
+                    lang_service.get("due_date"),
+                    lang_service.get("priority"),
+                    lang_service.get("col_status")
+                ]
+                writer.writerow(headers)
+                
                 for task in tasks:
-                    writer.writerow([task.id, task.title, task.description, task.due_date, task.priority, task.status])
+                    # Translate Priority and Status
+                    p_text = lang_service.get(f"priority_{task.priority}", default=task.priority)
+                    # Status logic: Assuming task.status is "Pending" or "Completed"
+                    # status_pending / status_completed keys exist? Let's check keys used in AnalyticsView
+                    # Analytics used "status_pending" (lowercase p) but task.status might be "Pending"
+                    s_key = f"status_{task.status.lower()}"
+                    s_text = lang_service.get(s_key, default=task.status)
+                    
+                    writer.writerow([task.id, task.title, task.description, task.due_date, p_text, s_text])
             return True, "Exported successfully"
         except Exception as e:
             return False, str(e)
@@ -37,13 +56,19 @@ class ExportService:
             y = height - 50
             
             c.setFont(font_bold, 16)
-            c.drawString(50, y, "Task Report")
+            c.drawString(50, y, lang_service.get("task_report"))
             y -= 30
             c.setFont(font_name, 12)
             
             for task in tasks:
-                # Ensure text is properly encoded/decoded if needed, but python strings are unicode
-                line = f"[{task.priority}] {task.title} - Due: {task.due_date} ({task.status})"
+                # Translate content
+                p_text = lang_service.get(f"priority_{task.priority}", default=task.priority)
+                s_key = f"status_{task.status.lower()}"
+                s_text = lang_service.get(s_key, default=task.status)
+                due_prefix = lang_service.get("due_prefix")
+                
+                # Format: [Priority] Title - Due: Date (Status)
+                line = f"[{p_text}] {task.title} - {due_prefix}{task.due_date} ({s_text})"
                 c.drawString(50, y, line)
                 y -= 20
                 if y < 50:
