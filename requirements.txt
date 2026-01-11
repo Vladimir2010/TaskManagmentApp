@@ -1,0 +1,11 @@
+PyQt6>=6.5.0
+PyQt6-Charts>=6.5.0
+requests>=2.31.0
+flask>=3.0.0
+bcrypt>=4.0.1
+cryptography>=41.0.0
+pywin32>=306
+reportlab>=4.0.0
+cx_Freeze>=6.15.0
+pyinstaller>=6.0.0
+schedule>=1.2.0
